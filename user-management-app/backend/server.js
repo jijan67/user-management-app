@@ -1,3 +1,10 @@
+// Explicit environment configuration
+require('dotenv').config({ 
+  path: process.env.NODE_ENV === 'production' 
+    ? '.env.production' 
+    : '.env' 
+});
+
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -6,7 +13,16 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { connectDB, initializeDatabase } = require('./db');
 const userRoutes = require('./routes/userRoutes');
-require('dotenv').config();
+
+// Log environment variables at the very start
+console.log('STARTUP ENVIRONMENT VARIABLES:', {
+  NODE_ENV: process.env.NODE_ENV,
+  PORT: process.env.PORT,
+  DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'NOT SET',
+  MYSQL_HOST: process.env.MYSQL_HOST,
+  MYSQL_USER: process.env.MYSQL_USER,
+  MYSQL_DATABASE: process.env.MYSQL_DATABASE
+});
 
 const app = express();
 
