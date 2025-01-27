@@ -108,10 +108,37 @@ app.get('/', (req, res) => {
 // Connect to MySQL and initialize database
 const startServer = async () => {
   try {
-    // Establish database connection
-    const connection = await connectDB();
+    // Attempt to connect to the database with multiple fallbacks
+    let connection = null;
     
-    // Initialize database (create tables if not exist)
+    // Try MySQL first
+    if (process.env.DATABASE_URL) {
+      try {
+        connection = await connectDB();
+        console.log('MySQL connection successful');
+      } catch (mysqlError) {
+        console.error('MySQL Connection Failed:', mysqlError);
+      }
+    }
+    
+    // If no database connection, log a critical error
+    if (!connection) {
+      console.error('CRITICAL: Unable to establish database connection');
+      console.error('Environment Details:', {
+        databaseUrl: process.env.DATABASE_URL,
+        mysqlHost: process.env.MYSQL_HOST,
+        mysqlUser: process.env.MYSQL_USER,
+        mysqlDatabase: process.env.MYSQL_DATABASE
+      });
+      
+      // In production, we might want to exit the process
+      if (process.env.NODE_ENV === 'production') {
+        console.error('Exiting due to database connection failure');
+        process.exit(1);
+      }
+    }
+    
+    // Initialize database tables
     await initializeDatabase();
 
     // Authentication Routes
