@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: user-management-backend
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: MYSQL_HOST
+        fromService:
+          name: user-management-mysql
+          type: pserv
+          property: host
+      - key: MYSQL_USER
+        fromService:
+          name: user-management-mysql
+          type: pserv
+          property: user
+      - key: MYSQL_PASSWORD
+        fromService:
+          name: user-management-mysql
+          type: pserv
+          property: password
+      - key: MYSQL_DATABASE
+        value: user_management
+      - key: JWT_SECRET
+        generateValue: true
+      - key: NODE_ENV
+        value: production
+
+  - type: pserv
+    name: user-management-mysql
+    engine: mysql
+    plan: free
+    previewPlan: free
+    maxmemoryMB: 256
+    minInstances: 1
+    scalingMode: standard
+    initialDataPath: /app/init.sql

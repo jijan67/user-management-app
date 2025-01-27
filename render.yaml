@@ -1,0 +1,54 @@
+services:
+  - type: web
+    name: user-management-backend
+    env: node
+    region: oregon
+    branch: main
+    buildCommand: cd user-management-app/backend && npm install
+    startCommand: cd user-management-app/backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MYSQL_HOST
+        fromDatabase:
+          name: user-management-db
+          property: host
+      - key: MYSQL_USER
+        fromDatabase:
+          name: user-management-db
+          property: user
+      - key: MYSQL_PASSWORD
+        fromDatabase:
+          name: user-management-db
+          property: password
+      - key: MYSQL_DATABASE
+        value: user_management
+      - key: JWT_SECRET
+        generateValue: true
+      - key: PORT
+        value: 5000
+
+  - type: web
+    name: user-management-frontend
+    env: static
+    region: oregon
+    branch: main
+    buildCommand: cd user-management-app/frontend && npm install && npm run build
+    staticPublishPath: user-management-app/frontend/build
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: REACT_APP_API_URL
+        fromService:
+          name: user-management-backend
+          type: web
+          property: url
+
+databases:
+  - name: user-management-db
+    region: oregon
+    plan: free
+    databaseName: user_management
+    ipAllowList: []  # Restrict as needed

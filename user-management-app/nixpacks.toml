@@ -1,0 +1,13 @@
+[build]
+cmd = "cd backend && npm install && npm run build"
+
+[start]
+cmd = "cd backend && npm start"
+
+[variables]
+NODE_VERSION = "16"
+
+[phases]
+setup = ["nodejs"]
+build = ["nodejs.install", "nodejs.build"]
+start = ["nodejs.start"]
