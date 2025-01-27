@@ -26,30 +26,21 @@ console.log('STARTUP ENVIRONMENT VARIABLES:', {
 
 const app = express();
 
-// Robust CORS configuration
+// Comprehensive CORS configuration
 const ALLOWED_ORIGINS = [
   'http://localhost:3000',
-  'https://user-management-app-zk5i.onrender.com', // Frontend URL
-  /\.onrender\.com$/ // Allow all Render frontend subdomains
+  'https://user-management-app-zk5i.onrender.com',
+  /\.onrender\.com$/
 ];
 
 app.use(cors({
   origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    // Check if the origin is in the allowed list
-    const isAllowed = ALLOWED_ORIGINS.some(allowedOrigin => {
-      if (typeof allowedOrigin === 'string') {
-        return origin === allowedOrigin;
-      }
-      if (allowedOrigin instanceof RegExp) {
-        return allowedOrigin.test(origin);
-      }
-      return false;
-    });
-
-    if (isAllowed) {
+    console.log('CORS Origin Check:', origin);
+    if (!origin || ALLOWED_ORIGINS.some(allowedOrigin => 
+      typeof allowedOrigin === 'string' 
+        ? origin === allowedOrigin 
+        : allowedOrigin.test(origin)
+    )) {
       callback(null, true);
     } else {
       console.warn(`CORS blocked for origin: ${origin}`);
@@ -60,6 +51,18 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
+
+// Middleware for detailed logging
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  console.log('Request Headers:', JSON.stringify(req.headers, null, 2));
+  console.log('Request Body:', JSON.stringify(req.body, null, 2));
+  next();
+});
+
+// Body parsing middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Middleware
 app.use((req, res, next) => {
@@ -124,13 +127,20 @@ app.use((req, res, next) => {
   next();
 });
 
-// Health check endpoint
+// Root health check endpoint
 app.get('/', (req, res) => {
   res.status(200).json({ 
     status: 'healthy', 
-    timestamp: new Date().toISOString() 
+    timestamp: new Date().toISOString(),
+    environment: {
+      nodeEnv: process.env.NODE_ENV,
+      databaseConfigured: !!process.env.DATABASE_URL
+    }
   });
 });
+
+// Explicit API prefix
+app.use('/api/auth', userRoutes);
 
 // Connect to MySQL and initialize database
 const startServer = async () => {
@@ -308,19 +318,29 @@ const startServer = async () => {
     // Routes
     app.use('/api/users', userRoutes);
 
+    // Catch-all route for debugging
+    app.use((req, res) => {
+      console.warn(`Unhandled route: ${req.method} ${req.path}`);
+      res.status(404).json({
+        message: 'Route Not Found',
+        path: req.path,
+        method: req.method
+      });
+    });
+
     // Global error handler
     app.use((err, req, res, next) => {
       console.error('Unhandled Error:', {
         message: err.message,
         stack: err.stack,
-        name: err.name,
-        code: err.code,
-        requestBody: req.body
+        name: err.name
       });
 
       res.status(500).json({
         message: 'Internal Server Error',
-        error: process.env.NODE_ENV === 'development' ? err.message : 'An unexpected error occurred'
+        error: process.env.NODE_ENV === 'production' 
+          ? 'An unexpected error occurred' 
+          : err.message
       });
     });
 

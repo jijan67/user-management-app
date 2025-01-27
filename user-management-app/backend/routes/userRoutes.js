@@ -2,12 +2,21 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const bodyParser = require('body-parser');
+const bcrypt = require('bcryptjs');
+const { connectDB, initializeDatabase } = require('../db');
 
 const router = express.Router();
 
 // Middleware to parse request body
 router.use(bodyParser.json());
 router.use(bodyParser.urlencoded({ extended: true }));
+
+// Middleware to log route access
+router.use((req, res, next) => {
+  console.log(`[UserRoutes] ${req.method} ${req.path}`);
+  console.log('Request Body:', JSON.stringify(req.body, null, 2));
+  next();
+});
 
 // Middleware to normalize request body
 router.use((req, res, next) => {
@@ -67,6 +76,7 @@ router.use((error, req, res, next) => {
 // User Registration
 router.post('/register', async (req, res, next) => {
   try {
+    console.log('Registration Request:', req.body);
     const { name, email, password } = req.body;
     
     console.log('Registration Attempt:', { 
@@ -107,8 +117,26 @@ router.post('/register', async (req, res, next) => {
     }
 
     try {
+      // Connect to database
+      const connection = await connectDB();
+
+      // Check if user already exists
+      const [existingUsers] = await connection.execute(
+        'SELECT * FROM users WHERE email = ?', 
+        [email]
+      );
+
+      if (existingUsers.length > 0) {
+        console.warn(`Registration failed: Email ${email} already exists`);
+        return res.status(409).json({ message: 'User already exists' });
+      }
+
+      // Hash password
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
+
       // Attempt to create user
-      const userId = await User.create(name, email, password);
+      const userId = await User.create(name, email, hashedPassword);
 
       // Generate JWT token
       const token = jwt.sign(
@@ -164,6 +192,7 @@ router.post('/register', async (req, res, next) => {
 // User Login
 router.post('/login', async (req, res, next) => {
   try {
+    console.log('Login Request:', req.body);
     const { email, password } = req.body;
     
     console.log('Login Attempt:', { 
@@ -189,54 +218,57 @@ router.post('/login', async (req, res, next) => {
       });
     }
     
-    // Find user by email
-    const user = await User.findByEmail(email);
-    if (!user) {
-      console.warn('Login attempt with non-existent email:', email);
-      return res.status(400).json({ 
-        message: 'Login failed', 
-        details: 'Invalid email or password' 
-      });
+    // Connect to database
+    const connection = await connectDB();
+
+    // Find user
+    const [users] = await connection.execute(
+      'SELECT * FROM users WHERE email = ?', 
+      [email]
+    );
+
+    if (users.length === 0) {
+      console.warn(`Login failed: User not found - ${email}`);
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    const user = users[0];
+
+    // Check password
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      console.warn(`Login failed: Invalid password - ${email}`);
+      return res.status(401).json({ message: 'Invalid credentials' });
     }
 
     // Check user status
-    if (user.status === 'blocked') {
-      console.warn('Login attempt for blocked user:', email);
-      return res.status(403).json({ 
-        message: 'Login failed', 
-        details: 'User account is blocked' 
-      });
-    }
-
-    // Compare passwords
-    const isMatch = await User.comparePassword(password, user.password);
-    if (!isMatch) {
-      console.warn('Login attempt with incorrect password:', email);
-      return res.status(400).json({ 
-        message: 'Login failed', 
-        details: 'Invalid email or password' 
-      });
+    if (user.status !== 'active') {
+      console.warn(`Login failed: Inactive user - ${email}`);
+      return res.status(403).json({ message: 'User account is not active' });
     }
 
     // Update last login
-    await User.updateLastLogin(email);
+    await connection.execute(
+      'UPDATE users SET last_login = NOW() WHERE id = ?', 
+      [user.id]
+    );
 
     // Generate JWT token
     const token = jwt.sign(
       { id: user.id, email: user.email }, 
-      process.env.JWT_SECRET, 
+      process.env.JWT_SECRET || 'fallback_secret', 
       { expiresIn: '1h' }
     );
 
-    console.log('User logged in successfully:', { userId: user.id, email });
-    res.json({ 
-      token, 
+    console.log(`User logged in successfully: ${email}`);
+    res.status(200).json({ 
+      message: 'Login successful', 
+      token,
       user: { 
         id: user.id, 
         name: user.name, 
-        email: user.email,
-        status: user.status
-      } 
+        email: user.email 
+      }
     });
   } catch (error) {
     console.error('Login error:', {
@@ -263,6 +295,7 @@ router.get('/users', async (req, res, next) => {
 // Update User Status (Admin route)
 router.patch('/users/:email/status', async (req, res, next) => {
   try {
+    console.log('Update User Status Request:', req.body);
     const { email } = req.params;
     const { status } = req.body;
 
@@ -272,10 +305,25 @@ router.patch('/users/:email/status', async (req, res, next) => {
       return res.status(400).json({ message: 'Email and status are required' });
     }
 
-    await User.updateStatus(email, status);
+    // Connect to database
+    const connection = await connectDB();
+
+    // Update user status
+    await connection.execute(
+      'UPDATE users SET status = ? WHERE email = ?', 
+      [status, email]
+    );
+
     console.log('User status updated successfully:', { email, status });
     res.json({ message: 'User status updated successfully' });
   } catch (error) {
+    console.error('Update User Status error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      code: error.code,
+      requestBody: req.body
+    });
     next(error);
   }
 });
@@ -283,6 +331,7 @@ router.patch('/users/:email/status', async (req, res, next) => {
 // Delete User (Admin functionality)
 router.delete('/:id', async (req, res, next) => {
   try {
+    console.log('Delete User Request:', req.params);
     const user = await User.findByIdAndDelete(req.params.id);
     
     if (!user) {
@@ -291,6 +340,13 @@ router.delete('/:id', async (req, res, next) => {
 
     res.json({ message: 'User deleted successfully' });
   } catch (error) {
+    console.error('Delete User error:', {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+      code: error.code,
+      requestBody: req.body
+    });
     next(error);
   }
 });
