@@ -4,30 +4,27 @@ require('dotenv').config();
 
 let connection = null;
 
-// Log all environment variables for debugging
-function logEnvironmentVariables() {
-  console.log('Environment Variables:');
-  console.log('NODE_ENV:', process.env.NODE_ENV);
-  console.log('DATABASE_URL:', process.env.DATABASE_URL ? 'SET' : 'NOT SET');
-  console.log('MYSQL_HOST:', process.env.MYSQL_HOST);
-  console.log('MYSQL_USER:', process.env.MYSQL_USER);
-  console.log('MYSQL_DATABASE:', process.env.MYSQL_DATABASE);
-  
-  // Log all environment variables for comprehensive debugging
-  Object.keys(process.env).forEach(key => {
-    if (key.includes('DB') || key.includes('MYSQL') || key.includes('DATABASE')) {
-      console.log(`${key}:`, process.env[key]);
-    }
-  });
+// Validate database URL
+function validateDatabaseUrl(url) {
+  if (!url || url.includes('${') || url.trim() === '') {
+    console.error('Invalid DATABASE_URL:', url);
+    return false;
+  }
+  return true;
 }
 
 async function connectDB() {
-  // Log environment variables before attempting connection
-  logEnvironmentVariables();
+  console.log('Attempting to connect to database...');
+  console.log('Environment Variables:', {
+    DATABASE_URL: process.env.DATABASE_URL ? 'SET' : 'NOT SET',
+    MYSQL_HOST: process.env.MYSQL_HOST,
+    MYSQL_USER: process.env.MYSQL_USER,
+    MYSQL_DATABASE: process.env.MYSQL_DATABASE
+  });
 
   try {
     // Prioritize PostgreSQL connection
-    if (process.env.DATABASE_URL) {
+    if (validateDatabaseUrl(process.env.DATABASE_URL)) {
       try {
         connection = new Pool({
           connectionString: process.env.DATABASE_URL,
@@ -36,37 +33,39 @@ async function connectDB() {
           }
         });
 
-        await connection.connect();
-        console.log('PostgreSQL connected successfully');
+        // Test the connection
+        const client = await connection.connect();
+        console.log('PostgreSQL connection successful');
+        client.release();
         return connection;
       } catch (postgresError) {
         console.error('PostgreSQL Connection Failed:', {
           message: postgresError.message,
+          name: postgresError.name,
+          code: postgresError.code,
           stack: postgresError.stack
         });
       }
     }
 
-    // Fallback to MySQL if no DATABASE_URL or PostgreSQL connection fails
+    // Fallback to MySQL if PostgreSQL fails
     try {
       connection = await mysql.createConnection({
         host: process.env.MYSQL_HOST || 'localhost',
         user: process.env.MYSQL_USER || 'root',
         password: process.env.MYSQL_PASSWORD || '',
         database: process.env.MYSQL_DATABASE || 'user_management',
-        port: process.env.MYSQL_PORT || 3306,
-        connectTimeout: 10000, // 10 seconds
-        waitForConnections: true,
-        connectionLimit: 10,
-        queueLimit: 0
+        port: parseInt(process.env.MYSQL_PORT || '3306', 10)
       });
 
       await connection.execute('SELECT 1');
-      console.log('MySQL connected successfully');
+      console.log('MySQL connection successful');
       return connection;
     } catch (mysqlError) {
       console.error('MySQL Connection Failed:', {
         message: mysqlError.message,
+        name: mysqlError.name,
+        code: mysqlError.code,
         stack: mysqlError.stack
       });
     }
@@ -138,11 +137,5 @@ async function initializeDatabase() {
 
 module.exports = {
   connectDB,
-  initializeDatabase,
-  getConnection: () => {
-    if (!connection) {
-      throw new Error('Database connection not established');
-    }
-    return connection;
-  }
+  initializeDatabase
 };
