@@ -5,11 +5,20 @@ require('dotenv').config();
 let connection = null;
 
 async function connectDB() {
-  const dbType = process.env.DB_TYPE || 'mysql';
-
   try {
-    if (dbType === 'mysql') {
-      // MySQL Connection
+    // Prioritize PostgreSQL connection
+    if (process.env.DATABASE_URL) {
+      connection = new Pool({
+        connectionString: process.env.DATABASE_URL,
+        ssl: {
+          rejectUnauthorized: false  // Required for Render's PostgreSQL
+        }
+      });
+
+      await connection.connect();
+      console.log('PostgreSQL connected successfully');
+    } else {
+      // Fallback to MySQL if no DATABASE_URL
       connection = await mysql.createConnection({
         host: process.env.MYSQL_HOST || 'localhost',
         user: process.env.MYSQL_USER || 'root',
@@ -26,27 +35,16 @@ async function connectDB() {
       await connection.execute('SELECT 1');
       
       console.log('MySQL connected successfully');
-    } else {
-      // PostgreSQL Connection
-      connection = new Pool({
-        connectionString: process.env.DATABASE_URL,
-        ssl: {
-          rejectUnauthorized: false  // Only for Render's PostgreSQL
-        }
-      });
-
-      await connection.connect();
-      console.log('PostgreSQL connected successfully');
     }
 
     return connection;
   } catch (error) {
-    console.error('Database Connection Error:', {
+    console.error('Detailed Database Connection Error:', {
       message: error.message,
       stack: error.stack,
       name: error.name,
       code: error.code,
-      dbType: dbType
+      databaseUrl: process.env.DATABASE_URL ? 'Present' : 'Not Set'
     });
     throw error;
   }
@@ -54,22 +52,10 @@ async function connectDB() {
 
 async function initializeDatabase() {
   try {
-    const dbType = process.env.DB_TYPE || 'mysql';
+    // Determine database type based on connection
+    const isPostgres = !!process.env.DATABASE_URL;
 
-    if (dbType === 'mysql') {
-      // MySQL Table Creation
-      await connection.execute(`
-        CREATE TABLE IF NOT EXISTS users (
-          id INT AUTO_INCREMENT PRIMARY KEY,
-          name VARCHAR(255) NOT NULL,
-          email VARCHAR(255) UNIQUE NOT NULL,
-          password VARCHAR(255) NOT NULL,
-          status ENUM('active', 'blocked') DEFAULT 'active',
-          registration_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          last_login TIMESTAMP NULL
-        )
-      `);
-    } else {
+    if (isPostgres) {
       // PostgreSQL Table Creation
       await connection.query(`
         CREATE TABLE IF NOT EXISTS users (
@@ -82,13 +68,27 @@ async function initializeDatabase() {
           last_login TIMESTAMP NULL
         )
       `);
+      console.log('PostgreSQL users table initialized');
+    } else {
+      // MySQL Table Creation
+      await connection.execute(`
+        CREATE TABLE IF NOT EXISTS users (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          email VARCHAR(255) UNIQUE NOT NULL,
+          password VARCHAR(255) NOT NULL,
+          status ENUM('active', 'blocked') DEFAULT 'active',
+          registration_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          last_login TIMESTAMP NULL
+        )
+      `);
+      console.log('MySQL users table initialized');
     }
-
-    console.log('Database tables initialized successfully');
   } catch (error) {
     console.error('Database Initialization Error:', {
       message: error.message,
-      stack: error.stack
+      stack: error.stack,
+      isPostgres: !!process.env.DATABASE_URL
     });
     throw error;
   }

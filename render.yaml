@@ -9,20 +9,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: MYSQL_HOST
+      - key: DATABASE_URL
         fromDatabase:
           name: user-management-db
-          property: host
-      - key: MYSQL_USER
-        fromDatabase:
-          name: user-management-db
-          property: user
-      - key: MYSQL_PASSWORD
-        fromDatabase:
-          name: user-management-db
-          property: password
-      - key: MYSQL_DATABASE
-        value: user_management
+          property: connectionString
       - key: JWT_SECRET
         generateValue: true
       - key: PORT
