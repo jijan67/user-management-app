@@ -6,6 +6,7 @@ require('dotenv').config({
 });
 
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const mysql = require('mysql2/promise');
@@ -317,6 +318,19 @@ const startServer = async () => {
 
     // Routes
     app.use('/api/users', userRoutes);
+
+    // Serve static files from the React app in production
+    if (process.env.NODE_ENV === 'production') {
+      const frontendPath = path.join(__dirname, '../frontend/build');
+      
+      // Serve static files
+      app.use(express.static(frontendPath));
+
+      // Catch-all route to serve index.html for client-side routing
+      app.get('*', (req, res) => {
+        res.sendFile(path.join(frontendPath, 'index.html'));
+      });
+    }
 
     // Catch-all route for debugging
     app.use((req, res) => {

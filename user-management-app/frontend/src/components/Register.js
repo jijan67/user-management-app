@@ -4,27 +4,56 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faUserPlus, faSignInAlt } from '@fortawesome/free-solid-svg-icons';
-import api from '../services/api';
+import axiosInstance from '../api/axios';
 
 const Register = () => {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: ''
+  });
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
   const navigate = useNavigate();
 
-  const handleRegister = async (e) => {
-    e.preventDefault();
-    try {
-      await api.register(name, email, password);
-      navigate('/login');
-    } catch (err) {
-      setError(err.response?.data?.error || 'Registration failed');
-    }
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prevState => ({
+      ...prevState,
+      [name]: value
+    }));
   };
 
-  const handleLogin = () => {
-    navigate('/login');
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+
+    try {
+      console.log('Registration Request:', formData);
+      const response = await axiosInstance.post('/auth/register', formData);
+      
+      setSuccess(response.data.message || 'Registration successful');
+      
+      // Redirect to login after successful registration
+      setTimeout(() => {
+        navigate('/login');
+      }, 2000);
+
+    } catch (err) {
+      console.error('Registration Error:', err);
+      
+      if (err.response) {
+        // The request was made and the server responded with a status code
+        setError(err.response.data.message || 'Registration failed');
+      } else if (err.request) {
+        // The request was made but no response was received
+        setError('No response from server. Please try again.');
+      } else {
+        // Something happened in setting up the request
+        setError('Error setting up registration request');
+      }
+    }
   };
 
   return (
@@ -56,35 +85,36 @@ const Register = () => {
           </Card.Header>
           <Card.Body className="p-4">
             {error && <Alert variant="danger">{error}</Alert>}
-            <Form onSubmit={handleRegister}>
+            {success && <Alert variant="success">{success}</Alert>}
+            <Form onSubmit={handleSubmit}>
               <Form.Group className="mb-3">
                 <Form.Label>Name</Form.Label>
                 <Form.Control 
                   type="text" 
-                  value={name} 
-                  onChange={(e) => setName(e.target.value)} 
-                  required 
-                  placeholder="Enter your full name"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  required
                 />
               </Form.Group>
               <Form.Group className="mb-3">
                 <Form.Label>Email</Form.Label>
                 <Form.Control 
                   type="email" 
-                  value={email} 
-                  onChange={(e) => setEmail(e.target.value)} 
-                  required 
-                  placeholder="Enter your email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
                 />
               </Form.Group>
               <Form.Group className="mb-3">
                 <Form.Label>Password</Form.Label>
                 <Form.Control 
                   type="password" 
-                  value={password} 
-                  onChange={(e) => setPassword(e.target.value)} 
-                  required 
-                  placeholder="Create a password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  required
                 />
               </Form.Group>
               <motion.div
@@ -104,7 +134,7 @@ const Register = () => {
                 <span>Already have an account? </span>
                 <Button 
                   variant="link" 
-                  onClick={handleLogin}
+                  onClick={() => navigate('/login')}
                   className="p-0"
                 >
                   Login here
