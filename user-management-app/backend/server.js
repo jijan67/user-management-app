@@ -29,12 +29,12 @@ const app = express();
 // Robust CORS configuration
 const ALLOWED_ORIGINS = [
   'http://localhost:3000',
-  process.env.FRONTEND_URL || '',
-  /\.onrender\.com$/  // Allow all Render frontend subdomains
+  'https://user-management-app-zk5i.onrender.com', // Frontend URL
+  /\.onrender\.com$/ // Allow all Render frontend subdomains
 ];
 
 app.use(cors({
-  origin: (origin, callback) => {
+  origin: function(origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
@@ -52,9 +52,12 @@ app.use(cors({
     if (isAllowed) {
       callback(null, true);
     } else {
+      console.warn(`CORS blocked for origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
 
@@ -99,6 +102,14 @@ app.use((req, res, next) => {
   } else {
     bodyParser.json()(req, res, next);
   }
+});
+
+// Middleware for logging requests
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  console.log('Request Headers:', req.headers);
+  console.log('Request Origin:', req.get('origin'));
+  next();
 });
 
 // Log all incoming requests
