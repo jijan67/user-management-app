@@ -1,7 +1,7 @@
 {
   "name": "user-management-backend",
   "version": "1.0.0",
-  "description": "User Management Backend with MySQL",
+  "description": "User Management Backend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -18,13 +18,13 @@
     "bcryptjs": "^2.4.3",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
+    "dotenv": "^16.0.3",
     "express": "^4.18.2",
-    "jsonwebtoken": "^9.0.2",
-    "mysql2": "^3.9.1",
-    "promise-mysql": "^5.2.0"
+    "jsonwebtoken": "^9.0.0",
+    "mysql2": "^3.2.0",
+    "pg": "^8.11.3"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2"
+    "nodemon": "^2.0.22"
   }
 }
